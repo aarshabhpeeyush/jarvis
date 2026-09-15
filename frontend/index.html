@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J.A.R.V.I.S. // SYSTEM ONLINE</title>
+  <link rel="stylesheet" href="/static/css/hud.css" />
+</head>
+<body>
+
+<!-- Corner decorations -->
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<div id="app">
+
+  <!-- ─── Header ─────────────────────────────────────────────────────────── -->
+  <header id="header">
+    <div class="logo">
+      J.A.R.V.I.S.
+      <span>// JUST A RATHER VERY INTELLIGENT SYSTEM</span>
+    </div>
+
+    <div class="status-bar">
+      <span><span class="dot" id="ws-dot"></span>WEBSOCKET</span>
+      <span><span class="dot"></span>CLAUDE OPUS 5</span>
+      <span><span class="dot"></span>HAL BRIDGE</span>
+    </div>
+
+    <div class="header-time" id="clock">00:00:00</div>
+  </header>
+
+  <!-- ─── Left Panel: Arc Reactor + Visualizer + HAL Controls ──────────── -->
+  <aside id="panel-left">
+
+    <!-- Arc Reactor -->
+    <div id="arc-reactor" aria-label="Arc Reactor status indicator">
+      <div class="arc-ring"></div>
+      <div class="arc-ring"></div>
+      <div class="arc-ring"></div>
+      <div class="arc-ring"></div>
+      <div class="arc-core"></div>
+    </div>
+
+    <div class="mode-badge">○ STANDBY</div>
+
+    <!-- Audio wave visualizer -->
+    <div id="voice-visualizer" aria-label="Audio visualizer"></div>
+
+    <!-- HAL Bridge quick-actions -->
+    <div class="hal-controls">
+      <div class="panel-title" style="border:none;padding:0 0 6px 0;">HAL BRIDGE</div>
+      <button class="hal-btn" data-action="move_actuator" data-target="arm_1">
+        ▷ MOVE ARM 1
+      </button>
+      <button class="hal-btn" data-action="toggle_relay" data-target="relay_1">
+        ◉ TOGGLE RELAY
+      </button>
+      <button class="hal-btn" data-action="read_telemetry" data-target="sensor_0">
+        ◎ READ TELEMETRY
+      </button>
+      <button class="hal-btn" data-action="set_led" data-target="strip_1">
+        ◆ LED AMBER
+      </button>
+      <button class="hal-btn" data-action="emergency_stop">
+        ■ EMERGENCY STOP
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- ─── Center Panel: Conversation ────────────────────────────────────── -->
+  <main id="panel-center">
+    <div id="conversation" role="log" aria-live="polite" aria-label="JARVIS conversation">
+      <!-- Messages injected here by app.js -->
+    </div>
+  </main>
+
+  <!-- ─── Right Panel: HUD Log ──────────────────────────────────────────── -->
+  <aside id="panel-right">
+    <div class="panel-title">◈ SYSTEM DIAGNOSTICS</div>
+    <div id="hud-log" role="log" aria-label="System activity log"></div>
+  </aside>
+
+  <!-- ─── Bottom: Dual Input Bar ────────────────────────────────────────── -->
+  <div id="input-bar">
+    <div class="input-row">
+      <span class="input-prefix">»</span>
+      <input
+        id="text-input"
+        type="text"
+        placeholder="Issue a command, Sir..."
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+        aria-label="Command input"
+      />
+      <button id="mic-btn" class="mic-btn" title="Activate voice input" aria-label="Microphone">
+        &#9679;
+      </button>
+      <button id="send-btn" class="send-btn" title="Send command" aria-label="Send">
+        &#9658;
+      </button>
+    </div>
+    <div class="input-hints">
+      <span><kbd class="hint-key">ENTER</kbd> send &nbsp;|&nbsp; <kbd class="hint-key">●</kbd> voice &nbsp;|&nbsp; "generate a goal..." for /goal compiler</span>
+      <span>J.A.R.V.I.S. // ANTHROPIC CLAUDE OPUS 5</span>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
