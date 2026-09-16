@@ -507,7 +507,7 @@ async function callClaude(userText){
       'content-type':'application/json',
     },
     body:JSON.stringify({
-      model:'claude-opus-5',
+      model:'claude-3-5-sonnet-20241022',
       max_tokens:4096,
       system:SYSTEM,
       messages:history,
