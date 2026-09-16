@@ -59,18 +59,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
   border-right:1px solid var(--amber-b);background:var(--bg-p);overflow:hidden}
 
 /* reactor */
-#reactor{position:relative;width:172px;height:172px;flex-shrink:0}
-.ring{position:absolute;border-radius:50%;border:1px solid var(--amber-b);top:50%;left:50%;transform:translate(-50%,-50%);animation:spin linear infinite}
-.ring:nth-child(1){width:100%;height:100%;border-color:rgba(255,183,0,.12);animation-duration:10s}
-.ring:nth-child(2){width:78%;height:78%;border-top-color:var(--amber);animation-duration:6s;animation-direction:reverse}
-.ring:nth-child(3){width:58%;height:58%;border-right-color:var(--amber-hi);animation-duration:3.5s}
-.ring:nth-child(4){width:38%;height:38%;border-color:rgba(255,183,0,.1);animation-duration:2s;animation-direction:reverse}
-.core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:50px;height:50px;border-radius:50%;
-  background:radial-gradient(circle,#FFF6CC 0%,var(--amber-hi) 28%,var(--amber) 55%,transparent 75%);
-  box-shadow:0 0 16px var(--amber),0 0 48px var(--amber-g);transition:box-shadow .3s,transform .3s}
-#reactor.speaking .core{box-shadow:0 0 32px var(--amber-hi),0 0 80px var(--amber),0 0 120px var(--amber-f);transform:translate(-50%,-50%) scale(1.16)}
-#reactor.listening .core{background:radial-gradient(circle,#AAEEFF 0%,var(--cyan) 38%,transparent 70%);box-shadow:0 0 32px var(--cyan),0 0 70px rgba(61,191,255,.32)}
-@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+#reactor{width:172px;height:172px;flex-shrink:0}
+#rxc{border-radius:50%;display:block}
 
 .chip{font-size:.52rem;letter-spacing:.18em;padding:3px 9px;border:1px solid var(--amber-b);color:var(--dim);text-transform:uppercase;transition:all .3s}
 .chip.listening{color:var(--cyan);border-color:var(--cyan);box-shadow:0 0 10px rgba(61,191,255,.28)}
@@ -203,8 +193,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
 
 <aside id="pl">
   <div id="reactor">
-    <div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="ring"></div>
-    <div class="core"></div>
+    <canvas id="rxc" width="172" height="172"></canvas>
   </div>
   <div class="chip" id="chip">○ STANDBY</div>
   <div id="viz"></div>
@@ -272,14 +261,148 @@ function runViz(){
 }
 runViz();
 
-const reactor=document.getElementById('reactor'),chip=document.getElementById('chip');
+const chip=document.getElementById('chip');
+let rxMode='idle';
 function setMode(m){
-  vmode=m;
-  reactor.className=m==='listen'?'listening':m==='speak'?'speaking':'';
+  vmode=m; rxMode=m;
   const labels={idle:'○ STANDBY',listen:'● LISTENING',speak:'◈ SPEAKING',proc:'⟳ PROCESSING'};
   const classes={idle:'chip',listen:'chip listening',speak:'chip speaking',proc:'chip'};
   chip.textContent=labels[m]||'○ STANDBY';chip.className=classes[m]||'chip';
 }
+
+// ── Circuit-sphere reactor canvas ──────────────────────────────────────────
+;(function(){
+  const cv=document.getElementById('rxc');if(!cv)return;
+  const c=cv.getContext('2d');
+  const W=cv.width,H=cv.height,CX=W/2,CY=H/2,R=W/2-2;
+
+  // Seeded RNG for consistent layout
+  let s=5381;const rnd=()=>{s=((s<<5)+s)^(s>>>7);return(s>>>0)/4294967296};
+
+  // Spokes
+  const NSPK=20;
+  const spokes=Array.from({length:NSPK},(_,i)=>{
+    const ang=(i/NSPK)*Math.PI*2+rnd()*0.2;
+    const len=R*(0.5+rnd()*0.45);
+    const ticks=[];
+    [0.26,0.44,0.61,0.78,0.92].forEach(rf=>{
+      const br=R*rf; if(br>len)return;
+      ticks.push({r:br,len:5+rnd()*16,side:rnd()>.5?1:-1,node:rnd()>.55});
+    });
+    return{ang,len,ticks};
+  });
+
+  // Arc segments at each ring radius
+  const RINGS=[0.26,0.44,0.61,0.78,0.92];
+  const arcSegs=RINGS.map((rf,i)=>({
+    r:R*rf,
+    segs:Array.from({length:3+Math.floor(rnd()*4)},()=>({
+      a0:rnd()*Math.PI*2, span:0.25+rnd()*1.1
+    })),
+    dir:(i%2===0?1:-1)*(0.0003+rnd()*0.0005)
+  }));
+
+  // Scatter nodes (bright city-light dots)
+  const dots=Array.from({length:35},()=>({
+    ang:rnd()*Math.PI*2, r:R*(0.2+rnd()*0.72),
+    sz:0.7+rnd()*2.2, bright:rnd()>.68
+  }));
+
+  let rot=0;
+
+  function draw(){
+    c.clearRect(0,0,W,H);
+
+    // Clip to circle
+    c.save();
+    c.beginPath();c.arc(CX,CY,R,0,Math.PI*2);c.clip();
+    c.fillStyle='#020204';c.fillRect(0,0,W,H);
+
+    const blue=rxMode==='listen';
+    const bright=rxMode==='speak';
+    const rgb=blue?'61,191,255':'255,183,0';
+    const hiCol=blue?'#AAEEFF':'#FFCC00';
+    const baseCol=blue?'#3DBFFF':'#FFB700';
+
+    // Ambient centre glow
+    const ag=c.createRadialGradient(CX,CY,0,CX,CY,R);
+    ag.addColorStop(0,`rgba(${rgb},${bright?.22:.13})`);
+    ag.addColorStop(.45,`rgba(${rgb},.05)`);
+    ag.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=ag;c.fillRect(0,0,W,H);
+
+    c.save();c.translate(CX,CY);
+
+    // Spokes + ticks
+    spokes.forEach(sk=>{
+      const a=sk.ang+rot*.08;
+      const cs=Math.cos(a),sn=Math.sin(a);
+      c.beginPath();
+      c.moveTo(cs*R*.14,sn*R*.14);
+      c.lineTo(cs*sk.len,sn*sk.len);
+      c.strokeStyle=`rgba(${rgb},.18)`;c.lineWidth=.5;c.stroke();
+
+      sk.ticks.forEach(t=>{
+        const px=cs*t.r,py=sn*t.r;
+        const nx=-sn*t.side,ny=cs*t.side;
+        c.beginPath();c.moveTo(px,py);c.lineTo(px+nx*t.len,py+ny*t.len);
+        c.strokeStyle=`rgba(${rgb},.5)`;c.lineWidth=.8;
+        c.shadowColor=baseCol;c.shadowBlur=4;c.stroke();c.shadowBlur=0;
+        if(t.node){
+          const ex=px+nx*t.len,ey=py+ny*t.len;
+          c.beginPath();c.arc(ex,ey,1.6,0,Math.PI*2);
+          c.fillStyle=hiCol;c.shadowColor=hiCol;c.shadowBlur=7;c.fill();c.shadowBlur=0;
+        }
+      });
+    });
+
+    // Arc segments (rotate independently)
+    arcSegs.forEach((arc,i)=>{
+      const off=rot*arc.dir*200;
+      arc.segs.forEach(sg=>{
+        c.beginPath();c.arc(0,0,arc.r,sg.a0+off,sg.a0+off+sg.span);
+        c.strokeStyle=`rgba(${rgb},${i<2?.55:.3})`;
+        c.lineWidth=i<2?1:.6;
+        c.shadowColor=baseCol;c.shadowBlur=i<2?5:2;c.stroke();c.shadowBlur=0;
+      });
+    });
+
+    // Scatter dots
+    dots.forEach(d=>{
+      const a=d.ang+rot*.04;
+      const x=Math.cos(a)*d.r,y=Math.sin(a)*d.r;
+      c.beginPath();c.arc(x,y,d.sz,0,Math.PI*2);
+      c.fillStyle=d.bright?hiCol:`rgba(${rgb},.65)`;
+      c.shadowColor=d.bright?hiCol:baseCol;c.shadowBlur=d.bright?9:3;
+      c.fill();c.shadowBlur=0;
+    });
+
+    c.restore();
+
+    // Outer ring
+    c.beginPath();c.arc(CX,CY,R-.5,0,Math.PI*2);
+    c.strokeStyle=`rgba(${rgb},.65)`;c.lineWidth=1.5;
+    c.shadowColor=baseCol;c.shadowBlur=10;c.stroke();c.shadowBlur=0;
+
+    c.restore();
+
+    // Central core glow
+    const cr=bright?34:22;
+    const cg=c.createRadialGradient(CX,CY,0,CX,CY,cr);
+    cg.addColorStop(0,'#FFFFFF');
+    cg.addColorStop(.18,blue?'#EEFFFF':'#FFF8CC');
+    cg.addColorStop(.5,baseCol);
+    cg.addColorStop(1,'transparent');
+    c.fillStyle=cg;
+    c.shadowColor=baseCol;c.shadowBlur=bright?35:22;
+    c.beginPath();c.arc(CX,CY,cr,0,Math.PI*2);c.fill();
+    c.shadowBlur=0;
+
+    rot+=.018;
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
 
 // ── HUD log ────────────────────────────────────────────────────────────────────
 const hlEl=document.getElementById('hl');let lc=0;
