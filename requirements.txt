@@ -1,0 +1,1 @@
+# No external packages needed — server.py uses Python stdlib only
