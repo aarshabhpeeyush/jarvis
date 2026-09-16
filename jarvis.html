@@ -276,129 +276,138 @@ function setMode(m){
   const c=cv.getContext('2d');
   const W=cv.width,H=cv.height,CX=W/2,CY=H/2,R=W/2-2;
 
-  // Seeded RNG for consistent layout
-  let s=5381;const rnd=()=>{s=((s<<5)+s)^(s>>>7);return(s>>>0)/4294967296};
+  // Seeded RNG
+  let s=7919;const rnd=()=>{s^=s<<13;s^=s>>17;s^=s<<5;return(s>>>0)/4294967296};
 
-  // Spokes
-  const NSPK=20;
-  const spokes=Array.from({length:NSPK},(_,i)=>{
-    const ang=(i/NSPK)*Math.PI*2+rnd()*0.2;
-    const len=R*(0.5+rnd()*0.45);
-    const ticks=[];
-    [0.26,0.44,0.61,0.78,0.92].forEach(rf=>{
-      const br=R*rf; if(br>len)return;
-      ticks.push({r:br,len:5+rnd()*16,side:rnd()>.5?1:-1,node:rnd()>.55});
-    });
-    return{ang,len,ticks};
-  });
+  // Build organic branching circuit paths (random walk + branching)
+  const segs=[];   // {x1,y1,x2,y2,brightness}
+  const nodes=[];  // {x,y,r,bright}
 
-  // Arc segments at each ring radius
-  const RINGS=[0.26,0.44,0.61,0.78,0.92];
-  const arcSegs=RINGS.map((rf,i)=>({
-    r:R*rf,
-    segs:Array.from({length:3+Math.floor(rnd()*4)},()=>({
-      a0:rnd()*Math.PI*2, span:0.25+rnd()*1.1
-    })),
-    dir:(i%2===0?1:-1)*(0.0003+rnd()*0.0005)
+  function walk(x,y,ang,energy){
+    if(energy<5)return;
+    const step=5+rnd()*7;
+    const turn=(rnd()-.5)*.55;
+    const na=ang+turn;
+    const nx=x+Math.cos(na)*step, ny=y+Math.sin(na)*step;
+    const dist=Math.sqrt(nx*nx+ny*ny);
+    if(dist>R*.94)return;
+    const bright=dist<R*.3;
+    segs.push({x1:x,y1:y,x2:nx,y2:ny,bright});
+    // Node at junction if turning a lot
+    if(Math.abs(turn)>.25) nodes.push({x:nx,y:ny,r:1+rnd()*1.4,bright:rnd()>.5});
+    // Branch
+    if(rnd()<.12&&energy>20) walk(nx,ny,na+(rnd()-.5)*Math.PI*.9,energy*.55);
+    walk(nx,ny,na,energy-step);
+  }
+
+  // Seed from center in many directions
+  for(let i=0;i<32;i++){
+    const a=(i/32)*Math.PI*2+rnd()*.25;
+    walk(0,0,a,R*.96);
+  }
+  // Extra mid-field seeds for density
+  for(let i=0;i<16;i++){
+    const a=rnd()*Math.PI*2, sr=R*(0.25+rnd()*.4);
+    walk(Math.cos(a)*sr,Math.sin(a)*sr,rnd()*Math.PI*2,R*.45);
+  }
+
+  // Bright scatter dots (city lights)
+  const dots=Array.from({length:60},()=>({
+    ang:rnd()*Math.PI*2, r:R*(0.08+rnd()*.88),
+    sz:.5+rnd()*2, bright:rnd()>.62
   }));
 
-  // Scatter nodes (bright city-light dots)
-  const dots=Array.from({length:35},()=>({
-    ang:rnd()*Math.PI*2, r:R*(0.2+rnd()*0.72),
-    sz:0.7+rnd()*2.2, bright:rnd()>.68
-  }));
+  // Two subtle rotating arcs (not full rings)
+  const orbitArcs=[
+    {r:R*.52,a0:rnd()*Math.PI*2,span:.9+rnd()*.8,spd:.0006},
+    {r:R*.75,a0:rnd()*Math.PI*2,span:.6+rnd()*.7,spd:-.0004},
+    {r:R*.35,a0:rnd()*Math.PI*2,span:.5+rnd()*.6,spd:.0009},
+  ];
 
   let rot=0;
 
   function draw(){
     c.clearRect(0,0,W,H);
-
-    // Clip to circle
     c.save();
     c.beginPath();c.arc(CX,CY,R,0,Math.PI*2);c.clip();
-    c.fillStyle='#020204';c.fillRect(0,0,W,H);
+    c.fillStyle='#010103';c.fillRect(0,0,W,H);
 
     const blue=rxMode==='listen';
     const bright=rxMode==='speak';
     const rgb=blue?'61,191,255':'255,183,0';
-    const hiCol=blue?'#AAEEFF':'#FFCC00';
+    const hiCol=blue?'#CCEFFF':'#FFDD55';
     const baseCol=blue?'#3DBFFF':'#FFB700';
 
-    // Ambient centre glow
-    const ag=c.createRadialGradient(CX,CY,0,CX,CY,R);
-    ag.addColorStop(0,`rgba(${rgb},${bright?.22:.13})`);
-    ag.addColorStop(.45,`rgba(${rgb},.05)`);
+    // Central ambient glow
+    const ag=c.createRadialGradient(CX,CY,0,CX,CY,R*.75);
+    ag.addColorStop(0,`rgba(${rgb},${bright?.28:.16})`);
+    ag.addColorStop(.5,`rgba(${rgb},.04)`);
     ag.addColorStop(1,'rgba(0,0,0,0)');
     c.fillStyle=ag;c.fillRect(0,0,W,H);
 
-    c.save();c.translate(CX,CY);
+    c.save();c.translate(CX,CY);c.rotate(rot*.025);
 
-    // Spokes + ticks
-    spokes.forEach(sk=>{
-      const a=sk.ang+rot*.08;
-      const cs=Math.cos(a),sn=Math.sin(a);
-      c.beginPath();
-      c.moveTo(cs*R*.14,sn*R*.14);
-      c.lineTo(cs*sk.len,sn*sk.len);
-      c.strokeStyle=`rgba(${rgb},.18)`;c.lineWidth=.5;c.stroke();
-
-      sk.ticks.forEach(t=>{
-        const px=cs*t.r,py=sn*t.r;
-        const nx=-sn*t.side,ny=cs*t.side;
-        c.beginPath();c.moveTo(px,py);c.lineTo(px+nx*t.len,py+ny*t.len);
-        c.strokeStyle=`rgba(${rgb},.5)`;c.lineWidth=.8;
-        c.shadowColor=baseCol;c.shadowBlur=4;c.stroke();c.shadowBlur=0;
-        if(t.node){
-          const ex=px+nx*t.len,ey=py+ny*t.len;
-          c.beginPath();c.arc(ex,ey,1.6,0,Math.PI*2);
-          c.fillStyle=hiCol;c.shadowColor=hiCol;c.shadowBlur=7;c.fill();c.shadowBlur=0;
-        }
-      });
+    // Draw circuit segments
+    segs.forEach(sg=>{
+      c.beginPath();c.moveTo(sg.x1,sg.y1);c.lineTo(sg.x2,sg.y2);
+      c.strokeStyle=sg.bright?`rgba(${rgb},.55)`:`rgba(${rgb},.28)`;
+      c.lineWidth=sg.bright?.9:.5;
+      if(sg.bright){c.shadowColor=baseCol;c.shadowBlur=5;}
+      c.stroke();c.shadowBlur=0;
     });
 
-    // Arc segments (rotate independently)
-    arcSegs.forEach((arc,i)=>{
-      const off=rot*arc.dir*200;
-      arc.segs.forEach(sg=>{
-        c.beginPath();c.arc(0,0,arc.r,sg.a0+off,sg.a0+off+sg.span);
-        c.strokeStyle=`rgba(${rgb},${i<2?.55:.3})`;
-        c.lineWidth=i<2?1:.6;
-        c.shadowColor=baseCol;c.shadowBlur=i<2?5:2;c.stroke();c.shadowBlur=0;
-      });
-    });
-
-    // Scatter dots
-    dots.forEach(d=>{
-      const a=d.ang+rot*.04;
-      const x=Math.cos(a)*d.r,y=Math.sin(a)*d.r;
-      c.beginPath();c.arc(x,y,d.sz,0,Math.PI*2);
-      c.fillStyle=d.bright?hiCol:`rgba(${rgb},.65)`;
-      c.shadowColor=d.bright?hiCol:baseCol;c.shadowBlur=d.bright?9:3;
+    // Junction nodes
+    nodes.forEach(n=>{
+      c.beginPath();c.arc(n.x,n.y,n.r,0,Math.PI*2);
+      c.fillStyle=n.bright?hiCol:`rgba(${rgb},.7)`;
+      c.shadowColor=n.bright?hiCol:baseCol;c.shadowBlur=n.bright?8:3;
       c.fill();c.shadowBlur=0;
     });
 
     c.restore();
 
-    // Outer ring
+    // Rotating orbit arcs (on top, un-rotated by circuit)
+    c.save();c.translate(CX,CY);
+    orbitArcs.forEach(arc=>{
+      const a=arc.a0+rot*arc.spd*60;
+      c.beginPath();c.arc(0,0,arc.r,a,a+arc.span);
+      c.strokeStyle=`rgba(${rgb},.55)`;c.lineWidth=1;
+      c.shadowColor=baseCol;c.shadowBlur=6;c.stroke();c.shadowBlur=0;
+    });
+    c.restore();
+
+    // Scatter dots (city lights, slow drift)
+    c.save();c.translate(CX,CY);
+    dots.forEach(d=>{
+      const a=d.ang+rot*.012;
+      const x=Math.cos(a)*d.r,y=Math.sin(a)*d.r;
+      c.beginPath();c.arc(x,y,d.sz,0,Math.PI*2);
+      c.fillStyle=d.bright?hiCol:`rgba(${rgb},.6)`;
+      c.shadowColor=d.bright?hiCol:baseCol;c.shadowBlur=d.bright?10:3;
+      c.fill();c.shadowBlur=0;
+    });
+    c.restore();
+
+    // Outer boundary ring
     c.beginPath();c.arc(CX,CY,R-.5,0,Math.PI*2);
-    c.strokeStyle=`rgba(${rgb},.65)`;c.lineWidth=1.5;
+    c.strokeStyle=`rgba(${rgb},.55)`;c.lineWidth=1.5;
     c.shadowColor=baseCol;c.shadowBlur=10;c.stroke();c.shadowBlur=0;
 
     c.restore();
 
-    // Central core glow
-    const cr=bright?34:22;
+    // Core glow (drawn outside clip)
+    const cr=bright?36:24;
     const cg=c.createRadialGradient(CX,CY,0,CX,CY,cr);
     cg.addColorStop(0,'#FFFFFF');
-    cg.addColorStop(.18,blue?'#EEFFFF':'#FFF8CC');
-    cg.addColorStop(.5,baseCol);
+    cg.addColorStop(.15,blue?'#E0F8FF':'#FFFBE0');
+    cg.addColorStop(.45,baseCol);
     cg.addColorStop(1,'transparent');
     c.fillStyle=cg;
-    c.shadowColor=baseCol;c.shadowBlur=bright?35:22;
+    c.shadowColor=baseCol;c.shadowBlur=bright?40:28;
     c.beginPath();c.arc(CX,CY,cr,0,Math.PI*2);c.fill();
     c.shadowBlur=0;
 
-    rot+=.018;
+    rot+=1;
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
