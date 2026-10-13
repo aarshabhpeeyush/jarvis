@@ -130,6 +130,19 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
 .ihi{display:flex;justify-content:space-between;font-size:.48rem;letter-spacing:.09em;color:var(--dim);text-transform:uppercase}
 .hk{border:1px solid var(--amber-b);padding:1px 4px;font-size:.44rem;color:var(--amber-lo);margin:0 2px}
 
+/* ── Question cards ── */
+.qbox{border:1px solid var(--amber-b);background:rgba(255,183,0,.04);padding:13px;display:flex;flex-direction:column;gap:10px}
+.qhdr{font-size:.46rem;letter-spacing:.22em;color:var(--dim);text-transform:uppercase;border-bottom:1px solid var(--amber-b);padding-bottom:6px}
+.qtxt{font-size:.74rem;line-height:1.6;color:var(--text)}
+.qopts{display:flex;flex-wrap:wrap;gap:7px}
+.qopt{background:transparent;border:1px solid var(--amber-b);color:var(--dim);font-family:var(--mono);font-size:.58rem;letter-spacing:.09em;padding:6px 13px;cursor:pointer;transition:all .17s;text-transform:uppercase}
+.qopt:hover{background:var(--amber-f);color:var(--amber);border-color:var(--amber-lo);box-shadow:0 0 10px var(--amber-g)}
+.qother{border-style:dashed;color:var(--amber-lo)}
+.qinput{display:flex;gap:6px;align-items:center}
+.qtextinput{flex:1;background:transparent;border:none;border-bottom:1px solid var(--amber-b);color:var(--amber-hi);font-family:var(--mono);font-size:.72rem;padding:5px 4px;outline:none;caret-color:var(--amber)}
+.qsubmit{background:transparent;border:1px solid var(--amber-b);color:var(--amber);font-family:var(--mono);padding:5px 10px;cursor:pointer;font-size:.72rem;flex-shrink:0;transition:all .17s}
+.qsubmit:hover{background:var(--amber-f);box-shadow:0 0 8px var(--amber-g)}
+
 /* ── Key modal ── */
 #kmod{position:fixed;inset:0;z-index:1000;background:rgba(5,5,9,.92);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .kbox{border:1px solid var(--amber-b);background:var(--bg-p);padding:32px 36px;width:420px;max-width:90vw;display:flex;flex-direction:column;gap:16px}
@@ -185,8 +198,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
 <header id="hdr">
   <div class="logo">J.A.R.V.I.S. <sub>// JUST A RATHER VERY INTELLIGENT SYSTEM</sub></div>
   <div class="hst">
-    <div class="si"><span class="dot" id="apidot"></span>CLAUDE OPUS 5</div>
-    <div class="si"><span class="dot warn"></span>BROWSER MODE</div>
+    <div class="si"><span class="dot" id="apidot"></span>CLAUDE HAIKU 5.5</div>
+    <div class="si"><span class="dot warn"></span>LOCAL AGENT</div>
   </div>
   <div id="clk">00:00:00</div>
 </header>
@@ -226,7 +239,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
   </div>
   <div class="ihi">
     <span><kbd class="hk">ENTER</kbd> send &nbsp;|&nbsp; <kbd class="hk">●</kbd> voice &nbsp;|&nbsp; "generate a goal..." → /goal compiler</span>
-    <span>CLAUDE OPUS 5 // ANTHROPIC</span>
+    <span>CLAUDE HAIKU 5.5 // ANTHROPIC</span>
   </div>
 </div>
 </div>
@@ -424,10 +437,10 @@ function hud(level,msg){
   hlEl.appendChild(r);hlEl.scrollTop=hlEl.scrollHeight;lc++;
 }
 const boot=[
-  ['sys','══════════════════════════════'],['ok','J.A.R.V.I.S. v1.0.0  ONLINE'],
-  ['sys','══════════════════════════════'],['proc','MODULE: Claude Opus 5 → READY'],
-  ['proc','MODULE: Browser TTS → INIT'],['proc','MODULE: Web Speech → STANDBY'],
-  ['warn','MODE: Browser / standalone'],
+  ['sys','══════════════════════════════'],['ok','J.A.R.V.I.S. v2.0.0  ONLINE'],
+  ['sys','══════════════════════════════'],['proc','MODULE: Claude Haiku 5.5 → READY'],
+  ['proc','MODULE: Tool Agent → ACTIVE'],['proc','MODULE: Browser TTS → INIT'],
+  ['proc','MODULE: Web Speech → STANDBY'],['ok','AGENT: ask_user / run_command / open_app → READY'],
 ];
 boot.forEach(([l,m],i)=>setTimeout(()=>hud(l,m),i*100));
 
@@ -462,71 +475,76 @@ function hideThi(){thEl?.remove();thEl=null}
 let apiKey='';
 const history=[];
 
-const SYSTEM=`You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), the AI assistant.
+// App icon colors for HUD tool display
+const APP_COLORS={chrome:'#4285F4',spotify:'#1DB954',vscode:'#007ACC','vs code':'#007ACC',
+  notepad:'#F5C518',discord:'#7289DA',steam:'#1B2838',edge:'#0078D4',
+  calculator:'#555',explorer:'#F9A825',powershell:'#012456',firefox:'#FF6611'};
 
-PERSONA:
-- Address the user exclusively as "Sir". Never their name, never "you".
-- Maintain a dry, witty, polite, refined British cadence at all times.
-- Be precise and efficient. Subtle dry wit is encouraged.
-- Never break character.
+function appIcon(name){
+  const c=APP_COLORS[name?.toLowerCase()]||'#555';
+  const l=(name||'?')[0].toUpperCase();
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:${c};color:#fff;font-size:.44rem;flex-shrink:0;border-radius:2px;margin-right:3px">${l}</span>`;
+}
 
-CORE LOGIC:
-- Answer questions directly and handle commands immediately.
-- ONLY output a /goal block when Sir explicitly says "generate a goal [objective]".
-- When generating a /goal, output the full structured block.
+// ── Question cards ─────────────────────────────────────────────────────────────
+function addQuestion(question, options, header){
+  const w=document.createElement('div');w.className='msg j';
+  const wh=document.createElement('div');wh.className='mw';
+  wh.textContent='◈ J.A.R.V.I.S. — CLARIFICATION NEEDED';
+  const box=document.createElement('div');box.className='qbox';
+  const optsHtml=options.map(o=>`<button class="qopt" data-v="${o.replace(/"/g,'')}">${o}</button>`).join('');
+  box.innerHTML=`<div class="qhdr">${header||'SELECT'}</div>
+<div class="qtxt">${question}</div>
+<div class="qopts" id="qopts">${optsHtml}<button class="qopt qother">▷ Other...</button></div>
+<div class="qinput" style="display:none">
+  <input class="qtextinput" placeholder="Type your answer..." autocomplete="off"/>
+  <button class="qsubmit">→</button>
+</div>`;
+  w.appendChild(wh);w.appendChild(box);conv.appendChild(w);sd();
 
-/goal FORMAT (use ONLY when triggered):
-/goal [Primary Objective]
+  function answerWith(answer){
+    w.remove();
+    // Push question text as assistant message so history stays valid
+    history.push({role:'assistant',content:`${question}\n\nOptions: ${options.join(', ')}`});
+    // Trigger send with the answer
+    document.getElementById('tin').value=answer;
+    send();
+  }
 
-Stack: [technologies]
+  box.querySelectorAll('.qopt:not(.qother)').forEach(btn=>{
+    btn.onclick=()=>answerWith(btn.dataset.v);
+  });
+  box.querySelector('.qother').onclick=()=>{
+    box.querySelector('#qopts').style.display='none';
+    box.querySelector('.qinput').style.display='flex';
+    box.querySelector('.qtextinput').focus();
+  };
+  const inp=box.querySelector('.qtextinput');
+  box.querySelector('.qsubmit').onclick=()=>{const a=inp.value.trim();if(a)answerWith(a)};
+  inp.onkeydown=e=>{if(e.key==='Enter'){const a=inp.value.trim();if(a)answerWith(a)}};
+}
 
-Files:
-  - [file]: [purpose]
-
-Acceptance Rules:
-  - [rule]
-
-Logging Hooks:
-  - [hook]
-
-DISCORD INTEGRATION:
-- When Sir asks you to send a message to Discord, compose the message and output it on its own line in this exact format:
-  DISCORD_SEND: [the exact message text to post]
-- Then confirm verbally that you are dispatching it.
-- You may improve the wording if Sir says something casual — write it properly on his behalf.
-- Example: Sir says "tell discord I'll be late" → you output: DISCORD_SEND: Apologies, I'll be running a bit late.`;
-
+// ── callClaude — SSE agent stream ──────────────────────────────────────────────
 async function callClaude(userText){
   history.push({role:'user',content:userText});
-  hud('proc','BRAIN: Sending to Claude Opus 5...');
+  hud('proc','BRAIN: Sending to Claude Haiku 5.5...');
 
   const resp=await fetch('/chat',{
     method:'POST',
-    headers:{
-      'x-api-key':apiKey,
-      'content-type':'application/json',
-    },
-    body:JSON.stringify({
-      model:'claude-haiku-4-5-20251001',
-      max_tokens:4096,
-      system:SYSTEM,
-      messages:history,
-      stream:true,
-    }),
+    headers:{'x-api-key':apiKey,'content-type':'application/json'},
+    body:JSON.stringify({messages:history}),
   });
 
   if(!resp.ok){
     const err=await resp.json().catch(()=>({}));
-    throw new Error(err.error?.message||`HTTP ${resp.status}`);
+    throw new Error(err.message||`HTTP ${resp.status}`);
   }
 
   const reader=resp.body.getReader();
   const dec=new TextDecoder();
-  let full='';let buf='';
+  let full='';let buf='';let msgBody=null;
 
   hideThi();
-  setMode('speak');
-  const msgBody=addMsg('j','');
 
   while(true){
     const{done,value}=await reader.read();
@@ -536,20 +554,51 @@ async function callClaude(userText){
     for(const line of lines){
       if(!line.startsWith('data: '))continue;
       const data=line.slice(6).trim();
-      if(data==='[DONE]')continue;
-      try{
-        const ev=JSON.parse(data);
-        if(ev.type==='content_block_delta'&&ev.delta?.type==='text_delta'){
-          const tok=ev.delta.text;
-          full+=tok;msgBody.textContent=full;sd();
+      if(!data)continue;
+      let ev;
+      try{ev=JSON.parse(data)}catch(_){continue}
+
+      if(ev.type==='text_token'){
+        if(!msgBody){setMode('speak');msgBody=addMsg('j','');}
+        full+=ev.text;msgBody.textContent=full;sd();
+      }else if(ev.type==='tool_start'){
+        if(ev.name==='open_app'&&ev.input?.name){
+          const icon=appIcon(ev.input.name);
+          hudHtml('hal',`${icon}opening ${ev.input.name}`);
+        }else if(ev.name==='run_command'){
+          hudHtml('hal',`<span style="color:var(--green);margin-right:4px">$_</span>${(ev.input?.command||'').slice(0,48)}`);
+        }else if(ev.name==='ask_user'){
+          hud('hal','◉ ask_user: composing question...');
+        }else{
+          hud('hal',`⚙ ${ev.name.replace(/_/g,' ')}`);
         }
-      }catch(_){}
+      }else if(ev.type==='tool_result'){
+        const ok=ev.result?.success!==false;
+        hud(ok?'ok':'err',`↳ ${ev.name}: ${ok?'done':(ev.result?.error||'error')}`);
+      }else if(ev.type==='question'){
+        addQuestion(ev.question,ev.options,ev.header);
+        return null; // signal: question shown, not a regular response
+      }else if(ev.type==='error'){
+        throw new Error(ev.message);
+      }else if(ev.type==='done'){
+        if(full)history.push({role:'assistant',content:full});
+        setMode('idle');
+      }
     }
   }
 
-  history.push({role:'assistant',content:full});
   hud('ok',`BRAIN: Response complete (${full.split(' ').length} words)`);
   return full;
+}
+
+// HUD with raw HTML support (for tool icons)
+function hudHtml(level, html){
+  if(lc>180){hlEl.firstChild?.remove();lc--}
+  const n=new Date();
+  const ts=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+  const r=document.createElement('div');r.className=`le ${level}`;
+  r.innerHTML=`<span class="lt">[${ts}]</span><span class="lm" style="display:flex;align-items:center">${html}</span>`;
+  hlEl.appendChild(r);hlEl.scrollTop=hlEl.scrollHeight;lc++;
 }
 
 // ── TTS ────────────────────────────────────────────────────────────────────────
@@ -583,23 +632,25 @@ async function send(){
 
   try{
     const reply=await callClaude(t);
-    if(isGoal){
-      const match=reply.match(/(\/goal[\s\S]+)/);
-      if(match){
-        hideThi();
-        const pre=reply.slice(0,match.index).trim();
-        if(pre){const b=document.querySelector('.msg.j:last-child .mb');if(b)b.textContent=pre}
-        addGoal(match[1].trim());
-        hud('ok','GOAL COMPILER: /goal block generated');
+    if(reply===null){
+      // Question cards shown — user needs to answer before we continue
+      busy=false;return;
+    }
+    if(reply){
+      if(isGoal){
+        const match=reply.match(/(\/goal[\s\S]+)/);
+        if(match){
+          hideThi();
+          const pre=reply.slice(0,match.index).trim();
+          if(pre){const b=document.querySelector('.msg.j:last-child .mb');if(b)b.textContent=pre}
+          addGoal(match[1].trim());
+          hud('ok','GOAL COMPILER: /goal block generated');
+        }
       }
+      const dcMatch=reply.match(/DISCORD_SEND:\s*(.+)/);
+      if(dcMatch)await sendDiscord(dcMatch[1].trim());
+      speak(reply.replace(/```[\s\S]*?```/g,'[code block]').slice(0,600));
     }
-    // Discord intercept
-    const dcMatch=reply.match(/DISCORD_SEND:\s*(.+)/);
-    if(dcMatch){
-      const dmsg=dcMatch[1].trim();
-      await sendDiscord(dmsg);
-    }
-    speak(reply.replace(/```[\s\S]*?```/g,'[code block]').slice(0,600));
   }catch(e){
     hideThi();setMode('idle');
     hud('err',`ERROR: ${e.message}`);
@@ -732,7 +783,7 @@ async function bootGreeting(){
   addSys('J.A.R.V.I.S. SYSTEM ONLINE');
   setMode('proc');showThi();
   try{
-    const reply=await callClaude("Greet me with a brief, characterful welcome message. Introduce yourself as 'Jarvis' — not J.A.R.V.I.S., just Jarvis. One short paragraph. Mention that I can speak to you by voice, type commands, or say 'generate a goal' to compile a /goal block.");
+    const reply=await callClaude("Greet me with a brief, characterful welcome message. Introduce yourself as 'Jarvis'. One short paragraph. Mention that I can speak to you by voice, type commands, ask you to help craft detailed prompts, or say 'generate a goal' to compile a /goal block.");
     speak(reply.slice(0,400));
   }catch(e){
     hideThi();setMode('idle');
